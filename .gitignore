@@ -1,0 +1,12 @@
+# ignore all compiled files
+**/obj
+**/main
+**/StreamCapture
+**/StreamPreview
+
+# additional files to ignore
+**/.vscode
+**/.DS_Store
+**/images
+**/test*
+**/16*
