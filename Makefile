@@ -12,8 +12,8 @@ SRC_DIR 	:= $(TOP_DIR)/src
 OBJ_DIR		:= $(TOP_DIR)/obj
 DEF_DIR		:= $(TOP_DIR)/16*
 COMMON_DIR	:= $(SRC_DIR)/common
-CAPTURE_DIR	:= $(SRC_DIR)/StreamCapture
-PREVIEW_DIR	:= $(SRC_DIR)/StreamPreview
+CAPTURE_DIR	:= $(SRC_DIR)/stream_capture
+PREVIEW_DIR	:= $(SRC_DIR)/stream_preview
 SC_APP 		:= $(TOP_DIR)/StreamCapture
 SP_APP 		:= $(TOP_DIR)/StreamPreview
 
