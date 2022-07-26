@@ -9,6 +9,7 @@
 #include <iostream>
 #include <getopt.h>
 #include <chrono>
+#include <unistd.h>
 #include <string.h>
 #include <fstream>
 
@@ -42,14 +43,17 @@ Options::Options() :
     captureHeight(CAPTURE_HEIGHT_0),
     captureFPS(CAPTURE_FPS_0)
 {
+    /* Assign time since epoch */
     directory = new char[FILENAME_MAX];
-    if (directory)
+    if (directory) {
+        memset(directory, 0, FILENAME_MAX);
         snprintf(directory, FILENAME_MAX, "%ld", (long) time(0));
+    }
 }
 
 /* Default destructor, do nothing since there are no heap-allocated member fields */
 Options::~Options() {
-    delete directory;
+    delete[] directory;
 }
 
 /* Display the following text when the executable is called with improper parameters or if the -h flag is passed */
@@ -107,6 +111,7 @@ bool Options::parse(int argc, char *argv[]) {
 
             /* Copy and validate passed folder name */
             case 'd':
+                printf("a;sljidfgh;asdfklvgh");
                 if (strlen(optarg) == 0 || !isalnum(optarg[0])) {
                     cout << "Invalid directory name, must begin with at least one alphanumeric character" << endl;
                     valid = false;

@@ -6,6 +6,9 @@
  *
  */
 
+#include <string>
+#include <vector>
+
 class Options;
 
 class App {
@@ -19,6 +22,8 @@ class App {
     private:
         void producerPrint(const char *s);
         static void signalCallback(int signum);
+        static std::vector<std::string> getUSBMountPaths();
+        static void rtrim(char *str, size_t n);
 
         Options *_options;
         static bool _doRun;

@@ -16,10 +16,14 @@
 #include <sys/stat.h>
 #include <signal.h>
 
+#include <iostream>
+
 using namespace Argus;
 using namespace EGLStream;
 
 #define MKDIR_MODE 0777
+#define WHITESPACE " \f\n\r\t\v"
+#define USB_MOUNT_PATH "/media/nvidia/"
 
 bool App::_doRun = true;
 App::App() :
@@ -31,8 +35,6 @@ App::~App() {
 }
 
 bool App::run(int argc, char * argv[]) {
-
-    EGLContext context = eglGetCurrentContext();
 
     /* Repeatedly use this value for error handling */
     bool errorOccurred = false;
@@ -55,6 +57,22 @@ bool App::run(int argc, char * argv[]) {
             Options::printHelp();
             errorOccurred = true;
         }
+    }
+
+    /* Search for available usb device and pre-append options directory to reflect changes */
+    if (!errorOccurred) {
+        producerPrint("Searching for available usb volumes...");
+        std::vector<std::string> devicePaths = getUSBMountPaths();
+        std::string path("");
+        if (devicePaths.empty()) {
+            producerPrint("Device not found, falling back to saving on system memory...");
+        } else {
+            producerPrint(std::string("Using USB device mounted at: " + devicePaths[0]).c_str());
+            path = devicePaths[0];
+        }
+        // pre-append the device path to the chosen directory name
+        strncat(&path[0], _options->directory, FILENAME_MAX);
+        strncpy(_options->directory, path.data(), FILENAME_MAX);
     }
     
     /* Create base directory for saving images, sub-directories are handled by consumers */
@@ -288,4 +306,39 @@ void App::producerPrint(const char *s) {
 /* Sets the static variable _doRun to false to exit the infinite loop in run() */
 void App::signalCallback(int signum) {
     _doRun = false;
+}
+
+/* Use system calls to return the names of any device listed under USB_MOUNT_PATH */
+std::vector<std::string> App::getUSBMountPaths() {
+    std::vector<std::string> result;
+    size_t bufferSize = 256;
+    char buffer[bufferSize];
+    std::string cmd("ls ");
+    cmd += USB_MOUNT_PATH;
+    FILE* pipe = popen(cmd.c_str(), "r");
+    int i = 0;
+    if (pipe) {
+        while (fgets(&buffer[0], bufferSize, pipe) != NULL) {
+            rtrim(buffer, bufferSize);
+
+            result.push_back(USB_MOUNT_PATH);
+            result[i] += buffer;
+            result[i] += "/";
+            i++;
+        }
+        pclose(pipe);
+    }
+    return result;
+}
+
+/* Trim a string from the right to remove control characters */
+void App::rtrim(char *str, size_t n) {
+    if (str) {
+        for (size_t i = 0; i < n; i++) {
+            if (iscntrl(*(str + i))) {
+                memset(str + i, 0, n - i);
+                break;
+            }
+        }
+    }
 }
