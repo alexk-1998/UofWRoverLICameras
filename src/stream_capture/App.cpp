@@ -60,18 +60,30 @@ bool App::run(int argc, char * argv[]) {
         }
     }
 
-    /* Search for available usb device and pre-append options directory to reflect changes */
+    /* Search for available usb device and pre-append options directory to reflect changes
+       If we choose directory "bar" and a device is found mounted at /media/nvidia/foo/
+       the resultant path should be /media/nvidia/foo/bar/ else we use
+       /bar/ which is created in the working directory */
     if (!errorOccurred) {
         producerPrint("Searching for first available USB volume...");
         std::vector<std::string> devicePaths = getUSBMountPaths();
         std::string path("");
-        if (devicePaths.empty()) {
-            producerPrint("USB device not found, falling back to saving on system memory...");
-        } else {
-            producerPrint(std::string("Using USB device mounted at: " + devicePaths[0]).c_str());
-            path = devicePaths[0];
+        std::string l4t("L4T-README");
+        // search for any device not named "L4T-README"
+        if (!devicePaths.empty()) {
+            for (std::string devicePath : devicePaths) {
+                if (devicePath.find(l4t) == std::string::npos) {
+                    path = devicePath;
+                }
+            }
         }
-        // pre-append the device path to the chosen directory name
+        // fall back to system since no path is found
+        if (devicePaths.empty() || path.size() == 0)
+            producerPrint("USB device not found, falling back to saving on system memory...");
+        else
+            producerPrint(std::string("Using USB device mounted at: " + path).c_str());
+
+        // pre-append the resultant path to the chosen directory name
         strncat(&path[0], _options->directory, FILENAME_MAX);
         strncpy(_options->directory, path.data(), FILENAME_MAX);
     }

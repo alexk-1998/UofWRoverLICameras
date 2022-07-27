@@ -124,34 +124,40 @@ bool ConsumerThread::threadExecute() {
             if (!iNativeBuffer) {
                 consumerPrint("An error occurred while retrieving the image buffer interface! Exiting...");
                 errorOccurred = true;
-                break;
             }
 
-            /* Using the libnvjpeg.so file from JetPack 4.3.1 will cause buffer copy failures below. 
-            * Replace the library with the file discussed in the thread:
-            * https://forums.developer.nvidia.com/t/streaming-using-jpegenc-halts-after-a-short-delay/109924/5 */
-
             /* If we don't already have a buffer, create one from this image */
-            if (_dmabuf == -1) {
-                _dmabuf = iNativeBuffer->createNvBuffer(iEglOutputStream->getResolution(),
-                                                        NvBufferColorFormat_YUV420,
-                                                        NvBufferLayout_BlockLinear);
+            if (!errorOccurred) {
                 if (_dmabuf == -1) {
-                    consumerPrint("An error occurred while creating the NvBuffer! Exiting...");
+                    _dmabuf = iNativeBuffer->createNvBuffer(iEglOutputStream->getResolution(),
+                                                            NvBufferColorFormat_YUV420,
+                                                            NvBufferLayout_BlockLinear);
+                    if (_dmabuf == -1) {
+                        consumerPrint("An error occurred while creating the NvBuffer! Exiting...");
+                        errorOccurred = true;
+                    }
+                } else if (iNativeBuffer->copyToNvBuffer(_dmabuf) != STATUS_OK) {
+                    consumerPrint("An error occurred while copying to the NvBuffer! Exiting...");
                     errorOccurred = true;
-                    break;
                 }
-            } else if (iNativeBuffer->copyToNvBuffer(_dmabuf) != STATUS_OK) {
-                consumerPrint("An error occurred while copying to the NvBuffer! Exiting...");
-                errorOccurred = true;
-                break;
             }
 
             /* Process frame. */
-            if (processV4L2Fd(_dmabuf, index++) && !wroteFirst) {
-                consumerPrint("First image successfully written! This message will not be shown for any subsequent images.");
-                wroteFirst = true;
+            if (!errorOccurred) {
+                if (processV4L2Fd(_dmabuf, index++)) {
+                    if (!wroteFirst) {
+                        consumerPrint("First image successfully written! This message will not be shown for any subsequent images.");
+                        wroteFirst = true;
+                    }
+                } else {
+                    consumerPrint("An error occurred while writing the JPEG image! Exiting...");
+                    errorOccurred = true;
+                }
             }
+
+            /* Exit if any previous operations raised errors */
+            if (errorOccurred)
+                break;
         }
     }
 
@@ -183,7 +189,8 @@ bool ConsumerThread::processV4L2Fd(int32_t fd, uint64_t index) {
         unsigned long size = _outputBufferSize;
         if (_jpegEncoder->encodeFromFd(fd, JCS_YCbCr, &_outputBuffer, size) == 0) {
             outputFile->write((char *) _outputBuffer, size);
-            success = true;
+            success = outputFile->good();
+            outputFile->close();
         }
     }
     delete outputFile;
