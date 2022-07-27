@@ -111,7 +111,6 @@ bool Options::parse(int argc, char *argv[]) {
 
             /* Copy and validate passed folder name */
             case 'd':
-                printf("a;sljidfgh;asdfklvgh");
                 if (strlen(optarg) == 0 || !isalnum(optarg[0])) {
                     cout << "Invalid directory name, must begin with at least one alphanumeric character" << endl;
                     valid = false;

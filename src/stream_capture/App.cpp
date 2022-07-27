@@ -39,11 +39,12 @@ bool App::run(int argc, char * argv[]) {
     /* Repeatedly use this value for error handling */
     bool errorOccurred = false;
 
-    /* Register signal callback to various signals (ctrl+c, ctrl+d, etc...) */
-    signal(SIGHUP, signalCallback);
-    signal(SIGINT, signalCallback);
-    signal(SIGQUIT, signalCallback);
-    signal(SIGTERM, signalCallback);
+    /* Register signal callback to various signals (ctrl+c, ctrl+d, etc...)
+       Lazy OR means lines are executed if errorOccurred is not already true */
+    errorOccurred = errorOccurred || signal(SIGHUP, signalCallback) == SIG_ERR;
+    errorOccurred = errorOccurred || signal(SIGINT, signalCallback) == SIG_ERR;
+    errorOccurred = errorOccurred || signal(SIGQUIT, signalCallback) == SIG_ERR;
+    errorOccurred = errorOccurred || signal(SIGTERM, signalCallback) == SIG_ERR;
 
     /* Verify the Options object was successfully created */
     if (!errorOccurred) {
@@ -61,11 +62,11 @@ bool App::run(int argc, char * argv[]) {
 
     /* Search for available usb device and pre-append options directory to reflect changes */
     if (!errorOccurred) {
-        producerPrint("Searching for available usb volumes...");
+        producerPrint("Searching for first available USB volume...");
         std::vector<std::string> devicePaths = getUSBMountPaths();
         std::string path("");
         if (devicePaths.empty()) {
-            producerPrint("Device not found, falling back to saving on system memory...");
+            producerPrint("USB device not found, falling back to saving on system memory...");
         } else {
             producerPrint(std::string("Using USB device mounted at: " + devicePaths[0]).c_str());
             path = devicePaths[0];
