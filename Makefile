@@ -14,8 +14,10 @@ DEF_DIR		:= $(TOP_DIR)/16*
 COMMON_DIR	:= $(SRC_DIR)/common
 CAPTURE_DIR	:= $(SRC_DIR)/stream_capture
 PREVIEW_DIR	:= $(SRC_DIR)/stream_preview
-SC_APP 		:= $(TOP_DIR)/StreamCapture
-SP_APP 		:= $(TOP_DIR)/StreamPreview
+SC			:= StreamCapture
+SP			:= StreamPreview
+SC_APP 		:= $(TOP_DIR)/$(SC)
+SP_APP 		:= $(TOP_DIR)/$(SP)
 
 # All common header files
 CPPFLAGS += -std=c++11 \
@@ -84,4 +86,9 @@ $(OBJ_DIR):
 	mkdir -p $@
 
 clean:
+	rm -rf $(HOME)/$(SC) $(HOME)/$(SP)
 	rm -rf $(SC_APP) $(SP_APP) $(OBJ_DIR) $(DEF_DIR)
+
+install:
+	ln -s $(SC_APP) $(HOME)/$(SC)
+	ln -s $(SP_APP) $(HOME)/$(SP)

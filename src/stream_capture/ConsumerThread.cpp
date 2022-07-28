@@ -4,7 +4,7 @@
  * Creates an EGLStream::FrameConsumer object to read frames from the
  * OutputStream, then creates/populates an NvBuffer (dmabuf) from the frames
  * to be processed by processV4L2Fd, which saves each frame as a JPEG image.
- * Note that for ThreadExecute to terminate, StopExecute must first be 
+ * Note that for ThreadExecute to terminate, stopExecute must first be 
  * called on the object.
  */
 
@@ -21,7 +21,7 @@ using namespace EGLStream;
 
 #define MKDIR_MODE 0777
 
-ConsumerThread::ConsumerThread(OutputStream *stream, uint32_t id, const Options& options, bool *doRun) :
+ConsumerThread::ConsumerThread(OutputStream *stream, uint32_t id, const Options& options) :
         _stream(stream),
         _dmabuf(-1),
         _jpegEncoder(NULL),
@@ -29,7 +29,7 @@ ConsumerThread::ConsumerThread(OutputStream *stream, uint32_t id, const Options&
         _outputBufferSize(0),
         _id(id),
         _options(options),
-        _doRun(doRun)
+        _doExecute(true)
 {}
 
 ConsumerThread::~ConsumerThread() {
@@ -111,7 +111,7 @@ bool ConsumerThread::threadExecute() {
     IFrame *iFrame = NULL;
     NV::IImageNativeBuffer *iNativeBuffer = NULL;
     bool wroteFirst = false;
-    while (!errorOccurred && *_doRun) {
+    while (!errorOccurred && _doExecute) {
 
         /* Acquire a frame, null when stream ends */
         frame.reset(iFrameConsumer->acquireFrame());
@@ -174,6 +174,11 @@ bool ConsumerThread::threadShutdown() {
     if (_options.profile)
         _jpegEncoder->printProfilingStats();
     return true;
+}
+
+/* Used to stop infinite loop in execute */
+void ConsumerThread::stopExecute() {
+    _doExecute = false;
 }
 
 /* JPEG encode the passed file descriptor, return bool indicating successful file writing */

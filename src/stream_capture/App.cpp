@@ -199,7 +199,7 @@ bool App::run(int argc, char * argv[]) {
     if (!errorOccurred) {
         producerPrint("Launching consumer threads...");
         for (uint8_t i = 0; i < numCameras  && !errorOccurred; i++) {
-            consumers[i] = new ConsumerThread(captureStreams[i].get(), i, *_options, &_doRun);
+            consumers[i] = new ConsumerThread(captureStreams[i].get(), i, *_options);
             numThreadsCreated = i + 1;
             if (!consumers[i]) {
                 producerPrint("Failed to create consumer thread! Exiting...");
@@ -263,11 +263,23 @@ bool App::run(int argc, char * argv[]) {
 
     /* Wait for captureTime seconds or until SIGINT is received. */
     if (!errorOccurred) {
-        if (_options->captureTime > 0)
-            sleep(_options->captureTime);
-        else
+        if (_options->captureTime > 0) {
+            time_t start = time(0);
+            while (time(0) - start < _options->captureTime)
+                sleep(1);
+            _doRun = false;
+        } else {
             while (_doRun)
                 sleep(1);
+        }
+    }
+
+    /* Start stop process for threads */
+    if (!errorOccurred) {
+        for (uint8_t i = 0; i < numCameras; i++)
+            if (consumers[i])
+                consumers[i]->stopExecute();
+        sleep(1);
     }
 
     /* Stop the repeating request. */
