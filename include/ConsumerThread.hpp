@@ -33,7 +33,7 @@ class ConsumerThread : public ArgusSamples::Thread {
     private:
         bool processV4L2Fd(int32_t fd, uint64_t frameNumber);
         uint32_t getJPEGSize(uint32_t width, uint32_t height);
-        void consumerPrint(const char *s);
+        void consumerLog(const char *s);
 
         Argus::OutputStream* _stream;
         Argus::UniqueObj<EGLStream::FrameConsumer> _consumer;

@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <string>
-
 #define CAPTURE_MODE_0 0
 
 class Options {

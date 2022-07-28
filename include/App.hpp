@@ -23,7 +23,7 @@ class App {
         bool run(int argc, char * argv[]);
 
     private:
-        void producerPrint(const char *s);
+        void producerLog(const char *s);
         static void signalCallback(int signum);
         static std::vector<std::string> getAvailableDevices();
 
