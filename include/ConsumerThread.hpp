@@ -1,9 +1,12 @@
-/*******************************************************************************
- * Consumer thread:
- *   Creates an EGLStream::FrameConsumer object to read frames from the
- *   OutputStream, then creates/populates an NvBuffer (dmabuf) from the frames
- *   to be processed by processV4L2Fd.
- ******************************************************************************/
+/*
+ * ConsumerThread.hpp
+ *
+ * Creates an EGLStream::FrameConsumer object to read frames from the
+ * OutputStream, then creates/populates an NvBuffer (dmabuf) from the frames
+ * to be processed by processV4L2Fd, which saves each frame as a JPEG image.
+ * Note that for ThreadExecute to terminate, StopExecute must first be 
+ * called on the object.
+ */
 
 #pragma once
 

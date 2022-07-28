@@ -1,3 +1,10 @@
+/*
+ * Options.hpp
+ *
+ * This class provides a singular object for passing command line options to objects in the main executable.
+ * Methods are provided for parsing the command line input and help output.
+ */
+
 #pragma once
 
 #include <string>
