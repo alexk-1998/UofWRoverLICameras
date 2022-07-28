@@ -17,13 +17,13 @@
 #include <signal.h>
 
 #include <iostream>
+#include <sstream>
+#include <vector>
 
 using namespace Argus;
 using namespace EGLStream;
 
 #define MKDIR_MODE 0777
-#define WHITESPACE " \f\n\r\t\v"
-#define USB_MOUNT_PATH "/media/nvidia/"
 
 bool App::_doRun = true;
 App::App() :
@@ -61,24 +61,21 @@ bool App::run(int argc, char * argv[]) {
     }
 
     /* Search for available usb device and pre-append options directory to reflect changes
-       If we choose directory "bar" and a device is found mounted at /media/nvidia/foo/
-       the resultant path should be /media/nvidia/foo/bar/ else we use
-       /bar/ which is created in the working directory */
+     * Eg. If we choose directory "bar" and a device is found mounted at /media/nvidia/foo/
+     * the resultant path should be /media/nvidia/foo/bar/
+     * Eg. If we choose directory "bar" and no device is found
+     * the resultant path should be ./bar/
+     */
     if (!errorOccurred) {
         producerPrint("Searching for first available USB volume...");
-        std::vector<std::string> devicePaths = getUSBMountPaths();
+        std::vector<std::string> devicePaths = getAvailableDevices();
         std::string path("");
-        std::string l4t("L4T-README");
-        // search for any device not named "L4T-README"
-        if (!devicePaths.empty()) {
-            for (std::string devicePath : devicePaths) {
-                if (devicePath.find(l4t) == std::string::npos) {
-                    path = devicePath;
-                }
-            }
+        for (std::string devicePath : devicePaths) {
+            path = devicePath;
+            break;             // just use the first device
         }
-        // fall back to system since no path is found
-        if (devicePaths.empty() || path.size() == 0)
+        // fall back to system since no path is set
+        if (path.size() == 0)
             producerPrint("USB device not found, falling back to saving on system memory...");
         else
             producerPrint(std::string("Using USB device mounted at: " + path).c_str());
@@ -321,37 +318,77 @@ void App::signalCallback(int signum) {
     _doRun = false;
 }
 
-/* Use system calls to return the names of any device listed under USB_MOUNT_PATH */
-std::vector<std::string> App::getUSBMountPaths() {
+/* Parse the output of lsblk to return the mount path of any removable block device
+ * lsblk output takes the form:
+ * NAME         MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT
+ * loop0          7:0    0    16M  1 loop 
+ * sda            8:0    1  57.6G  0 disk /media/nvidia/USB_62GB
+ * mmcblk0      179:0    0  29.1G  0 disk 
+ * ...
+ */
+std::vector<std::string> App::getAvailableDevices() {
+
+    // resultant strings, remains empty if pipe fails
     std::vector<std::string> result;
+
+    // avoid magic numbers
+    enum HEADER_INDEX {NAME, MAJ_MIN, RM, SIZE, RO, TYPE, MOUNTPOINT};
+
+    // stores one line from the lsblk result
     size_t bufferSize = 256;
     char buffer[bufferSize];
-    std::string cmd("ls ");
-    cmd += USB_MOUNT_PATH;
-    FILE* pipe = popen(cmd.c_str(), "r");
-    int i = 0;
-    if (pipe) {
-        while (fgets(&buffer[0], bufferSize, pipe) != NULL) {
-            rtrim(buffer, bufferSize);
+    std::stringstream ss;
+    std::string str;
+    bool valid;
 
-            result.push_back(USB_MOUNT_PATH);
-            result[i] += buffer;
-            result[i] += "/";
-            i++;
+    // open the pipe and repeatedly parse lines...
+    FILE* pipe = popen("lsblk", "r");
+    if (pipe) {
+        while (fgets(&buffer[0], bufferSize, pipe)) {
+
+            // read buffer into string stream
+            ss.str(buffer);
+            valid = true;
+            for (int i = 0; i <= MOUNTPOINT; i++) {
+
+                // skip if invalid condition is met in previous iteration or ss is empty
+                if (!valid || ss.rdbuf()->in_avail() == 0)
+                    break;
+
+                // validate the next token
+                ss >> str;
+                switch (i) {
+
+                    // check if device is removable
+                    case RM:
+                        if (str != "1")
+                            valid = false;
+                        break;
+
+                    // check if device is read-only
+                    case RO:
+                        if (str != "0")
+                            valid = false;
+                        break;
+
+                    // check if device is a disk block/partition
+                    case TYPE:
+                        if (str != "disk" && str != "part")
+                            valid = false;
+                        break;
+
+                    // get mount point path
+                    case MOUNTPOINT:
+                        if (valid && str.size() > 1)
+                            result.push_back(str + "/");
+                        break;
+
+                    default:
+                        break;
+                }
+            }
         }
         pclose(pipe);
     }
     return result;
-}
-
-/* Trim a string from the right to remove control characters */
-void App::rtrim(char *str, size_t n) {
-    if (str) {
-        for (size_t i = 0; i < n; i++) {
-            if (iscntrl(*(str + i))) {
-                memset(str + i, 0, n - i);
-                break;
-            }
-        }
-    }
 }

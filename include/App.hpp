@@ -25,8 +25,7 @@ class App {
     private:
         void producerPrint(const char *s);
         static void signalCallback(int signum);
-        static std::vector<std::string> getUSBMountPaths();
-        static void rtrim(char *str, size_t n);
+        static std::vector<std::string> getAvailableDevices();
 
         Options *_options;
         static bool _doRun;
