@@ -130,7 +130,7 @@ bool ConsumerThread::threadExecute() {
     auto start = std::chrono::steady_clock::now();
     while (!errorOccurred && _doExecute) {
 
-        /* Acquire a frame, null when stream ends */
+        /* Acquire a frame, null when stream ends or no frames available */
         frame.reset(iFrameConsumer->acquireFrame());
         iFrame = interface_cast<IFrame>(frame);
 
@@ -196,8 +196,7 @@ bool ConsumerThread::threadExecute() {
         _logger->log(ss.str());
     }        
 
-    if (!errorOccurred)
-        _logger->log("Process completed successfully, requesting shutdown...");
+    _logger->log("Process completed, requesting shutdown...");
     requestShutdown();
     return !errorOccurred;
 }

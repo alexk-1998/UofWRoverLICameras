@@ -124,10 +124,10 @@ bool Options::parse(int argc, char *argv[]) {
                     cout << "Invalid sensor mode, expected " << CAPTURE_MODE_0 << " or " << CAPTURE_MODE_1 << endl;
                     valid = false;
                 }
-                if (captureMode == CAPTURE_MODE_1) {
-                    cout << "The chosen sensor mode is temporarily disabled, use the default mode." << endl;
-                    valid = false;     
-                }
+                //if (captureMode == CAPTURE_MODE_1) {
+                //    cout << "The chosen sensor mode is temporarily disabled, use the default mode." << endl;
+                //    valid = false;     
+                //}
                 break;
 
             /* Get the time to capture */

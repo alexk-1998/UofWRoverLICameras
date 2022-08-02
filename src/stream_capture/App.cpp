@@ -202,7 +202,7 @@ bool App::run(int argc, char * argv[]) {
             } else {
                 iEglStreamSettings->setPixelFormat(PIXEL_FMT_YCbCr_420_888);
                 iEglStreamSettings->setEGLDisplay(EGL_NO_DISPLAY);
-                iEglStreamSettings->setResolution(iSensorMode->getResolution());
+                iEglStreamSettings->setResolution(_options->captureResolution);
                 captureStreams[i] = (UniqueObj<OutputStream>) iCaptureSessions[i]->createOutputStream(streamSettings.get());
                 if (!captureStreams[i]) {
                     logger->error("Failed to create capture stream! Exiting...");
