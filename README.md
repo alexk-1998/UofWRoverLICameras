@@ -5,6 +5,11 @@ The first executable, `StreamPreview`, is intended for displaying the 6 camera s
 
 The second executable, `StreamCapture`, is intended for capturing and saving frames repeatedly from each stream, until the process is killed or a time limit is reached.
 
+# Issues
+Currently, the second sensor mode is disabled for the device, enabling it will cause run-time bugs, but this is avoided while parsing the supplied options.
+
+The fps is currently lower than expected.
+
 # Setup
 Follow the instructions 1-8 in `IMX265-MIPI_R32.3.1_TX2_Six-CB_20200222_Driver_Guide.pdf` for flashing the Jetson TX2 with JetPack version 32.3.1 and installing the LI-TX1-CB-6CAM drivers.
 

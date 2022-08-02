@@ -89,6 +89,7 @@ bool App::run(int argc, char * argv[]) {
         strncat(&path[0], _options->directory, FILENAME_MAX);
         strncpy(_options->directory, path.data(), FILENAME_MAX);
     }
+    logger->setDirectory(_options->directory);
 
     /* Register signal callback to various signals (ctrl+c, ctrl+d, etc...)
        Lazy OR means lines are executed if errorOccurred is not already true */
@@ -104,12 +105,6 @@ bool App::run(int argc, char * argv[]) {
             logger->error("An error occured while creating the file structure, is the device/system full? Exiting...");
             errorOccurred = true;
         }
-    }
-
-    /* Write the options object to file */
-    if (!errorOccurred) {
-        logger->log("Writing the command line options to a file...");
-        _options->write();
     }
 
     /* Create the CameraProvider object and get the core interface */
@@ -158,9 +153,9 @@ bool App::run(int argc, char * argv[]) {
 
     /* Verify the selected sensor mode */
     ICameraProperties *iCameraProperties = NULL;
-    ISensorMode *iSensorMode = NULL;
     std::vector<SensorMode*> sensorModes;
     SensorMode *sensorMode = NULL;
+    ISensorMode *iSensorMode = NULL;
     if (!errorOccurred) {
         logger->log("Verifying the selected sensor mode...");
         iCameraProperties = interface_cast<ICameraProperties>(cameraDevices[0]);
@@ -174,11 +169,24 @@ bool App::run(int argc, char * argv[]) {
                 errorOccurred = true;
             } else if (_options->captureMode > sensorModes.size()) {
                 logger->log("Unable to set selected sensor mode, setting to default...");
-                _options->setCaptureMode(CAPTURE_MODE_0);
+                _options->captureMode = CAPTURE_MODE_0;
             } else {
                 sensorMode = sensorModes[_options->captureMode];
+                iSensorMode = interface_cast<ISensorMode>(sensorMode);
+                if (!iSensorMode) {
+                    logger->error("Failed to get ISensorMode interface! Exiting...");
+                    errorOccurred = true;
+                } else {
+                    _options->captureResolution = iSensorMode->getResolution();
+                }
             }
         }
+    }
+
+    /* Write the options object to file */
+    if (!errorOccurred) {
+        logger->log("Writing the command line options to a file...");
+        _options->write();
     }
 
     /* Initialize the settings of output stream */
@@ -194,7 +202,7 @@ bool App::run(int argc, char * argv[]) {
             } else {
                 iEglStreamSettings->setPixelFormat(PIXEL_FMT_YCbCr_420_888);
                 iEglStreamSettings->setEGLDisplay(EGL_NO_DISPLAY);
-                iEglStreamSettings->setResolution(Size2D<uint32_t>(_options->captureWidth, _options->captureHeight));
+                iEglStreamSettings->setResolution(iSensorMode->getResolution());
                 captureStreams[i] = (UniqueObj<OutputStream>) iCaptureSessions[i]->createOutputStream(streamSettings.get());
                 if (!captureStreams[i]) {
                     logger->error("Failed to create capture stream! Exiting...");
@@ -253,6 +261,7 @@ bool App::run(int argc, char * argv[]) {
                     errorOccurred = true;
                 } else {
                     iSourceSettings->setSensorMode(sensorMode);
+                    iSourceSettings->setFrameDurationRange(iSensorMode->getFrameDurationRange());
                     iRequest->enableOutputStream(captureStreams[i].get());
                 }
             }

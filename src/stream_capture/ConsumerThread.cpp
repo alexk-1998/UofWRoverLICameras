@@ -86,7 +86,7 @@ bool ConsumerThread::threadInitialize() {
     /* Allocate memory for JPEG encoded images */
     if (!errorOccurred) {
         _logger->log("Creating the encoder output buffer...");
-        _outputBufferSize = getJPEGSize(_options.captureWidth, _options.captureHeight);
+        _outputBufferSize = getJPEGSize(_options.captureResolution.width(), _options.captureResolution.height());
         _outputBuffer = new unsigned char[_outputBufferSize];
         if (!_outputBuffer) {
             _logger->error("Failed to allocate buffer memory!");
@@ -101,8 +101,7 @@ bool ConsumerThread::threadInitialize() {
         if (!_jpegEncoder) {
             _logger->error("Failed to create JPEGEncoder!");
             errorOccurred = true;
-        } else if (_options.profile)
-            _jpegEncoder->enableProfiling();
+        }
     }
 
     return !errorOccurred;
@@ -134,10 +133,8 @@ bool ConsumerThread::threadExecute() {
         /* Acquire a frame, null when stream ends */
         frame.reset(iFrameConsumer->acquireFrame());
         iFrame = interface_cast<IFrame>(frame);
-        if (!iFrame)
-            break;
 
-        if (iFrame->getNumber() % _options.saveEvery == 0) {
+        if (iFrame && (_options.saveEvery == 1 || iFrame->getNumber() % _options.saveEvery == 0)) {
 
             /* Get the IImageNativeBuffer extension interface */
             iNativeBuffer = interface_cast<NV::IImageNativeBuffer>(iFrame->getImage());
@@ -182,17 +179,20 @@ bool ConsumerThread::threadExecute() {
         }
     }
     auto stop = std::chrono::steady_clock::now();
-
     _doExecute = false;
 
     /* Calculate and display effective fps */
     if (_options.profile) {
-        auto elapsed = (stop - start).count();
-        double fps = (double) index / (double) elapsed;
+        double elapsed = (stop - start).count() / 1e9; // ns to s
+        double fps = (double) index / elapsed;
         std::stringstream ss;
         ss << "Images processed: " << std::to_string(index-1);
-        ss << "Time elapsed: " << std::to_string(elapsed);
-        ss << "Effective fps: " << std::to_string(fps);
+        _logger->log(ss.str());
+        ss.str("");
+        ss << "Time elapsed: " << std::to_string(elapsed) << " s";
+        _logger->log(ss.str());
+        ss.str("");
+        ss << "Effective fps: " << std::to_string(fps) << " fps";
         _logger->log(ss.str());
     }        
 
@@ -203,9 +203,6 @@ bool ConsumerThread::threadExecute() {
 }
 
 bool ConsumerThread::threadShutdown() {
-    /* Display encoder stats (frames processed, latency, ...) */
-    if (_options.profile)
-        _jpegEncoder->printProfilingStats();
     return true;
 }
 

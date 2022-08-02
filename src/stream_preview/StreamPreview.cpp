@@ -105,7 +105,7 @@ bool CaptureHolder::initialize(CameraDevice *device) {
         ORIGINATE_ERROR("Failed to create EglOutputStreamSettings");
 
     iEglStreamSettings->setPixelFormat(PIXEL_FMT_YCbCr_420_888);
-    iEglStreamSettings->setEGLDisplay(EGL_NO_DISPLAY);//DEFAULT_DISPLAY);
+    iEglStreamSettings->setEGLDisplay(EGL_NO_DISPLAY);
     iEglStreamSettings->setResolution(STREAM_SIZE);
 
     m_outputStream.reset(iCaptureSession->createOutputStream(streamSettings.get()));

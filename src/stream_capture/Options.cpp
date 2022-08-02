@@ -39,9 +39,7 @@ Options::Options() :
     saveEvery(DEFAULT_SAVE_EVERY),
     directory(NULL),
     captureMode(CAPTURE_MODE_0),
-    captureWidth(CAPTURE_WIDTH_0),
-    captureHeight(CAPTURE_HEIGHT_0),
-    captureFPS(CAPTURE_FPS_0)
+    captureResolution(0)
 {
     /* Assign time since epoch */
     directory = new char[FILENAME_MAX];
@@ -125,8 +123,10 @@ bool Options::parse(int argc, char *argv[]) {
                 if (captureMode != CAPTURE_MODE_0 && captureMode != CAPTURE_MODE_1) {
                     cout << "Invalid sensor mode, expected " << CAPTURE_MODE_0 << " or " << CAPTURE_MODE_1 << endl;
                     valid = false;
-                } else {
-                    setCaptureMode(captureMode);
+                }
+                if (captureMode == CAPTURE_MODE_1) {
+                    cout << "The chosen sensor mode is temporarily disabled, use the default mode." << endl;
+                    valid = false;     
                 }
                 break;
 
@@ -166,46 +166,22 @@ bool Options::parse(int argc, char *argv[]) {
     return valid;
 }
 
-/* Sets the correct capture parameters given a desired mode */
-bool Options::setCaptureMode(int mode) {
-    bool valid = true;
-    switch (mode) {
-        case CAPTURE_MODE_0:
-            captureMode = CAPTURE_MODE_0;
-            captureWidth = CAPTURE_WIDTH_0;
-            captureHeight = CAPTURE_HEIGHT_0;
-            captureFPS = CAPTURE_FPS_0;
-            break;
-        case CAPTURE_MODE_1:
-            captureMode = CAPTURE_MODE_1;
-            captureWidth = CAPTURE_WIDTH_1;
-            captureHeight = CAPTURE_HEIGHT_1;
-            captureFPS = CAPTURE_FPS_1;
-            break;
-        default:
-            cout << "Invalid sensor mode received (expected 0 or 1)" << endl;
-            valid = false;
-            break;
-    }
-    return valid;
-}
-
 /* Write to a file options.txt in the root directory */
 void Options::write() {
 
     /* Create the file */
     string filename(directory);
-    filename.append("/options.txt");
+    filename += "/options.txt";
     ofstream outputFile;
 
     /* Write */
     outputFile.open(filename);
     outputFile << "Root directory: " << directory << endl;
     outputFile << "Capture mode: " << captureMode << endl;
-    outputFile << "Capture width: " << captureWidth << endl;
-    outputFile << "Capture height: " << captureHeight << endl;
-    outputFile << "Capture fps: " << captureFPS << endl;
-    outputFile << "Capture time: " << captureTime << endl;
+    if (captureTime == 0)
+        outputFile << "Capture time: inf" << endl;
+    else
+        outputFile << "Capture time: " << captureTime << endl;
     outputFile << "Profile: " << (bool) profile << endl;
     outputFile << "Save every: " << saveEvery << endl;
     outputFile.close();
