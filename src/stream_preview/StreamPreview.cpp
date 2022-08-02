@@ -20,7 +20,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <signal.h>
 
 #include "opencv2/opencv.hpp"
 #include "opencv2/highgui.hpp"
@@ -43,10 +42,6 @@ bool                            g_doStream = true;
 /* Debug print macros */
 #define PRODUCER_PRINT(...) printf("PRODUCER: " __VA_ARGS__)
 #define CONSUMER_PRINT(...) printf("CONSUMER: " __VA_ARGS__)
-
-static void signalCallback(int signum) {
-    g_doStream = false;
-}
 
 namespace ArgusSamples {
 
@@ -110,7 +105,7 @@ bool CaptureHolder::initialize(CameraDevice *device) {
         ORIGINATE_ERROR("Failed to create EglOutputStreamSettings");
 
     iEglStreamSettings->setPixelFormat(PIXEL_FMT_YCbCr_420_888);
-    iEglStreamSettings->setEGLDisplay(EGL_DEFAULT_DISPLAY);
+    iEglStreamSettings->setEGLDisplay(EGL_NO_DISPLAY);//DEFAULT_DISPLAY);
     iEglStreamSettings->setResolution(STREAM_SIZE);
 
     m_outputStream.reset(iCaptureSession->createOutputStream(streamSettings.get()));
@@ -334,12 +329,6 @@ bool ConsumerThread::threadShutdown() {
  * and then submit repeat capture requests.
  */
 static bool execute() {
-
-    /* Setup signal callbacks */
-    signal(SIGHUP, signalCallback);
-    signal(SIGINT, signalCallback);
-    signal(SIGQUIT, signalCallback);
-    signal(SIGTERM, signalCallback);
 
     /* Initialize the Argus camera provider */
     g_cameraProvider = UniqueObj<CameraProvider>(CameraProvider::create());

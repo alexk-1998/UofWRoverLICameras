@@ -15,6 +15,7 @@
 #include <EGLStream/EGLStream.h>
 
 class Options;
+class Logger;
 class NvJPEGEncoder;
 
 class ConsumerThread : public ArgusSamples::Thread {
@@ -24,6 +25,7 @@ class ConsumerThread : public ArgusSamples::Thread {
         virtual ~ConsumerThread();
 
         void stopExecute();
+        bool isExecuting();
 
     protected:
         virtual bool threadInitialize();
@@ -43,5 +45,6 @@ class ConsumerThread : public ArgusSamples::Thread {
         uint32_t _outputBufferSize;
         uint32_t _id;
         const Options& _options;
+        Logger *_logger;
         bool _doExecute;
 };

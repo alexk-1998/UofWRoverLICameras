@@ -7,6 +7,6 @@
 # additional files to ignore
 **/.vscode
 **/.DS_Store
-**/images
-**/test*
-**/16*
+**/*.jpg
+**/*.jpeg
+**/*.JPEG

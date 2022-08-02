@@ -11,11 +11,13 @@
 #include "ConsumerThread.hpp"
 
 #include "Options.hpp"
+#include "Logger.hpp"
 #include <NvJpegEncoder.h>
 #include <EGLStream/NV/ImageNativeBuffer.h>
 #include <fstream>
 #include <sstream>
 #include <sys/stat.h>
+#include <chrono>
 
 using namespace Argus;
 using namespace EGLStream;
@@ -30,6 +32,7 @@ ConsumerThread::ConsumerThread(OutputStream *stream, uint32_t id, const Options&
         _outputBufferSize(0),
         _id(id),
         _options(options),
+        _logger(NULL),
         _doExecute(true)
 {}
 
@@ -40,50 +43,63 @@ ConsumerThread::~ConsumerThread() {
         delete[] _outputBuffer;
     if (_dmabuf != -1)
         NvBufferDestroy(_dmabuf);
+    if (_logger)
+        delete _logger;
 }
 
 bool ConsumerThread::threadInitialize() {
 
     bool errorOccurred = false;
 
+    /* Create the logger */
+    if (!errorOccurred) {
+        std::stringstream ss;
+        ss << "CONSUMER " << std::to_string(_id);
+        _logger = new Logger(ss.str(), _options.directory);
+        if (!_logger)
+            errorOccurred = true;
+        else
+            _logger->log("Logger successfully created!");
+    }
+
     /* Create the image sub-directory */
     if (!errorOccurred) {
-        consumerLog("Creating the image sub-directory...");
-        std::string subDirName(_options.directory);
-        subDirName.append("/cam" + std::to_string(_id));
-        if (mkdir(subDirName.c_str(), MKDIR_MODE) != 0) {
-            consumerLog("Failed to create image sub-directory!");
+        _logger->log("Creating the image sub-directory...");
+        std::stringstream ss;
+        ss << _options.directory << "/cam" << std::to_string(_id);
+        if (mkdir(ss.str().c_str(), MKDIR_MODE) != 0) {
+            _logger->error("Failed to create image sub-directory!");
             errorOccurred = true;
         }
     }
 
     /* Create the frame consumer */
     if (!errorOccurred) {
-        consumerLog("Creating the frame consumer...");
+        _logger->log("Creating the frame consumer...");
         _consumer.reset(FrameConsumer::create(_stream));
-        if (!_consumer || !_consumer.get()) {
-            consumerLog("Failed to create frame consumer!");
+        if (!_consumer && !_consumer.get()) {
+            _logger->error("Failed to create frame consumer!");
             errorOccurred = true;
         }
     }
 
     /* Allocate memory for JPEG encoded images */
     if (!errorOccurred) {
-        consumerLog("Creating the encoder output buffer...");
+        _logger->log("Creating the encoder output buffer...");
         _outputBufferSize = getJPEGSize(_options.captureWidth, _options.captureHeight);
         _outputBuffer = new unsigned char[_outputBufferSize];
         if (!_outputBuffer) {
-            consumerLog("Failed to allocate buffer memory!");
+            _logger->error("Failed to allocate buffer memory!");
             errorOccurred = true;
         }
     }
 
     /* Create encoder with name jpegenc */
     if (!errorOccurred) {
-        consumerLog("Creating the encoder...");
+        _logger->log("Creating the encoder...");
         _jpegEncoder = NvJPEGEncoder::createJPEGEncoder("jpegenc");
         if (!_jpegEncoder) {
-            consumerLog("Failed to create JPEGEncoder!");
+            _logger->error("Failed to create JPEGEncoder!");
             errorOccurred = true;
         } else if (_options.profile)
             _jpegEncoder->enableProfiling();
@@ -99,12 +115,12 @@ bool ConsumerThread::threadExecute() {
     bool errorOccurred = false;
 
     /* Wait until the producer has connected to the stream. */
-    consumerLog("Waiting until producer is connected...");
+    _logger->log("Waiting until producer is connected...");
     if (iEglOutputStream->waitUntilConnected() != STATUS_OK) {
-        consumerLog("Stream failed to connect! Exiting...");
+        _logger->error("Stream failed to connect! Exiting...");
         errorOccurred = true;
     } else
-        consumerLog("Producer has connected! Continuing...");
+        _logger->log("Producer has connected! Continuing...");
 
     /* Repeatedly save frames until a shutdown is requested from outside the class */
     uint64_t index = 1;
@@ -112,6 +128,7 @@ bool ConsumerThread::threadExecute() {
     IFrame *iFrame = NULL;
     NV::IImageNativeBuffer *iNativeBuffer = NULL;
     bool wroteFirst = false;
+    auto start = std::chrono::steady_clock::now();
     while (!errorOccurred && _doExecute) {
 
         /* Acquire a frame, null when stream ends */
@@ -125,7 +142,7 @@ bool ConsumerThread::threadExecute() {
             /* Get the IImageNativeBuffer extension interface */
             iNativeBuffer = interface_cast<NV::IImageNativeBuffer>(iFrame->getImage());
             if (!iNativeBuffer) {
-                consumerLog("An error occurred while retrieving the image buffer interface! Exiting...");
+                _logger->error("An error occurred while retrieving the image buffer interface! Exiting...");
                 errorOccurred = true;
             }
 
@@ -136,11 +153,11 @@ bool ConsumerThread::threadExecute() {
                                                             NvBufferColorFormat_YUV420,
                                                             NvBufferLayout_BlockLinear);
                     if (_dmabuf == -1) {
-                        consumerLog("An error occurred while creating the NvBuffer! Exiting...");
+                        _logger->error("An error occurred while creating the NvBuffer! Exiting...");
                         errorOccurred = true;
                     }
                 } else if (iNativeBuffer->copyToNvBuffer(_dmabuf) != STATUS_OK) {
-                    consumerLog("An error occurred while copying to the NvBuffer! Exiting...");
+                    _logger->error("An error occurred while copying to the NvBuffer! Exiting...");
                     errorOccurred = true;
                 }
             }
@@ -149,12 +166,13 @@ bool ConsumerThread::threadExecute() {
             if (!errorOccurred) {
                 if (processV4L2Fd(_dmabuf, index++)) {
                     if (!wroteFirst) {
-                        consumerLog("First image successfully written! This message will not be shown for any subsequent images.");
+                        _logger->log("First image successfully written! This message will not be shown for any subsequent images.");
                         wroteFirst = true;
                     }
                 } else {
-                    consumerLog("An error occurred while writing the JPEG image! Exiting...");
-                    errorOccurred = true;
+                    // device is probably full, don't actually set the error status, just exit
+                    _logger->log("An error occurred while writing the JPEG image, is the device/system full? Exiting...");
+                    _doExecute = false;
                 }
             }
 
@@ -163,9 +181,23 @@ bool ConsumerThread::threadExecute() {
                 break;
         }
     }
+    auto stop = std::chrono::steady_clock::now();
+
+    _doExecute = false;
+
+    /* Calculate and display effective fps */
+    if (_options.profile) {
+        auto elapsed = (stop - start).count();
+        double fps = (double) index / (double) elapsed;
+        std::stringstream ss;
+        ss << "Images processed: " << std::to_string(index-1);
+        ss << "Time elapsed: " << std::to_string(elapsed);
+        ss << "Effective fps: " << std::to_string(fps);
+        _logger->log(ss.str());
+    }        
 
     if (!errorOccurred)
-        consumerLog("Process completed successfully, requesting shutdown...");
+        _logger->log("Process completed successfully, requesting shutdown...");
     requestShutdown();
     return !errorOccurred;
 }
@@ -180,6 +212,11 @@ bool ConsumerThread::threadShutdown() {
 /* Used to stop infinite loop in execute */
 void ConsumerThread::stopExecute() {
     _doExecute = false;
+}
+
+/* Used to check if the thread should be killed */
+bool ConsumerThread::isExecuting() {
+    return _doExecute;
 }
 
 /* JPEG encode the passed file descriptor, return bool indicating successful file writing */
@@ -208,22 +245,4 @@ bool ConsumerThread::processV4L2Fd(int32_t fd, uint64_t index) {
 /* Returns the buffer size, in bytes, of an encoded JPEG image with the same width and height as the passed fields */
 uint32_t ConsumerThread::getJPEGSize(uint32_t width, uint32_t height) {
     return width * height * 3 / 2;
-}
-
-/* Standard method for formatted printing and logging */
-void ConsumerThread::consumerLog(const char *s) {
-
-    // format the string
-    std::stringstream ss;
-    ss << "CONSUMER " << _id << " [" << time(0) << "]: " << s;
-
-    // write to STDOUT
-    std::cout << ss.str() << std::endl;
-
-    // write to log file
-    std::string logname(_options.directory);
-    logname += "/log.txt";
-    std::ofstream logfile(logname, std::ios_base::app);
-    if (logfile)
-        logfile << ss.str() << std::endl;
 }

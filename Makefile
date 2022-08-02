@@ -10,7 +10,6 @@ CPP := g++
 TOP_DIR 	:= $(shell pwd)
 SRC_DIR 	:= $(TOP_DIR)/src
 OBJ_DIR		:= $(TOP_DIR)/obj
-DEF_DIR		:= $(TOP_DIR)/16*
 COMMON_DIR	:= $(SRC_DIR)/common
 CAPTURE_DIR	:= $(SRC_DIR)/stream_capture
 PREVIEW_DIR	:= $(SRC_DIR)/stream_preview
@@ -87,8 +86,9 @@ $(OBJ_DIR):
 
 clean:
 	rm -rf $(HOME)/$(SC) $(HOME)/$(SP)
-	rm -rf $(SC_APP) $(SP_APP) $(OBJ_DIR) $(DEF_DIR)
+	rm -rf $(SC_APP) $(SP_APP) $(OBJ_DIR)
 
 install:
+	rm -rf $(HOME)/$(SC) $(HOME)/$(SP)
 	ln -s $(SC_APP) $(HOME)/$(SC)
 	ln -s $(SP_APP) $(HOME)/$(SP)

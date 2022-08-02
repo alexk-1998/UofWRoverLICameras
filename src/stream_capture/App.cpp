@@ -11,6 +11,7 @@
 
 #include "ConsumerThread.hpp"
 #include "Options.hpp"
+#include "Logger.hpp"
 #include <Argus/Argus.h>
 #include <EGLStream/EGLStream.h>
 #include <sys/stat.h>
@@ -40,22 +41,25 @@ bool App::run(int argc, char * argv[]) {
     /* Repeatedly use this value for error handling */
     bool errorOccurred = false;
 
-    /* Register signal callback to various signals (ctrl+c, ctrl+d, etc...)
-       Lazy OR means lines are executed if errorOccurred is not already true */
-    errorOccurred = errorOccurred || signal(SIGHUP, signalCallback) == SIG_ERR;
-    errorOccurred = errorOccurred || signal(SIGINT, signalCallback) == SIG_ERR;
-    errorOccurred = errorOccurred || signal(SIGQUIT, signalCallback) == SIG_ERR;
-    errorOccurred = errorOccurred || signal(SIGTERM, signalCallback) == SIG_ERR;
+    /* Create the logger object, don't log until directory path is set in options */
+    Logger *logger = NULL;
+    if (!errorOccurred) {
+        logger = new Logger("PRODUCER", "");
+        if (!logger) {
+            std::cout << "An error occurred while creating the Logger object! Exiting..." << std::endl;
+            errorOccurred = true;
+        }
+    }
 
     /* Verify the Options object was successfully created */
     if (!errorOccurred) {
-        producerLog("Verifying the command line options...");
+        std::cout << "Verifying the command line options..." << std::endl;
         if (!_options) {
-            producerLog("An error occurred while creating the Options object! Exiting...");
+            std::cout << "An error occurred while creating the Options object! Exiting..." << std::endl;
             Options::printHelp();
             errorOccurred = true;
         } else if (!_options->parse(argc, argv)) {
-            producerLog("An error occurred while verifying the command line options! Exiting...");
+            std::cout << "An error occurred while verifying the command line options! Exiting..." << std::endl;
             Options::printHelp();
             errorOccurred = true;
         }
@@ -68,7 +72,7 @@ bool App::run(int argc, char * argv[]) {
      * the resultant path should be ./bar/
      */
     if (!errorOccurred) {
-        producerLog("Searching for first available USB volume...");
+        std::cout << "Searching for first available USB volume...\n";
         std::vector<std::string> devicePaths = getAvailableDevices();
         std::string path("");
         for (std::string devicePath : devicePaths) {
@@ -77,27 +81,34 @@ bool App::run(int argc, char * argv[]) {
         }
         // fall back to system since no path is set
         if (path.size() == 0)
-            producerLog("USB device not found, falling back to saving on system memory...");
+            std::cout << "USB device not found, falling back to saving on system memory...\n";
         else
-            producerLog(std::string("Using USB device mounted at: " + path).c_str());
+            std::cout << "Using USB device mounted at: " << path << "\n";
 
         // pre-append the resultant path to the chosen directory name
         strncat(&path[0], _options->directory, FILENAME_MAX);
         strncpy(_options->directory, path.data(), FILENAME_MAX);
     }
+
+    /* Register signal callback to various signals (ctrl+c, ctrl+d, etc...)
+       Lazy OR means lines are executed if errorOccurred is not already true */
+    errorOccurred = errorOccurred || signal(SIGHUP, signalCallback) == SIG_ERR;
+    errorOccurred = errorOccurred || signal(SIGINT, signalCallback) == SIG_ERR;
+    errorOccurred = errorOccurred || signal(SIGQUIT, signalCallback) == SIG_ERR;
+    errorOccurred = errorOccurred || signal(SIGTERM, signalCallback) == SIG_ERR;
     
     /* Create base directory for saving images, sub-directories are handled by consumers */
     if (!errorOccurred) {
-        producerLog("Creating base output directory...");
+        logger->log("Creating base output directory...");
         if (mkdir(_options->directory, MKDIR_MODE) != 0) {
-            producerLog("An error occured while creating the file structure! Exiting...");
+            logger->error("An error occured while creating the file structure, is the device/system full? Exiting...");
             errorOccurred = true;
         }
     }
 
     /* Write the options object to file */
     if (!errorOccurred) {
-        producerLog("Writing the command line options to a file...");
+        logger->log("Writing the command line options to a file...");
         _options->write();
     }
 
@@ -105,11 +116,11 @@ bool App::run(int argc, char * argv[]) {
     UniqueObj<CameraProvider> cameraProvider;
     ICameraProvider *iCameraProvider = NULL;
     if (!errorOccurred) {
-        producerLog("Getting the camera provider...");
+        logger->log("Getting the camera provider...");
         cameraProvider.reset(CameraProvider::create());
         iCameraProvider = interface_cast<ICameraProvider>(cameraProvider);
         if (!iCameraProvider) {
-            producerLog("An error occured while creating the camera provider! Exiting...");
+            logger->error("An error occured while creating the camera provider! Exiting...");
             errorOccurred = true;
         }
     }
@@ -117,10 +128,10 @@ bool App::run(int argc, char * argv[]) {
     /* Get the camera devices */
     std::vector<CameraDevice*> cameraDevices;
     if (!errorOccurred) {
-        producerLog("Getting the camera devices...");
+        logger->log("Getting the camera devices...");
         iCameraProvider->getCameraDevices(&cameraDevices);
         if (cameraDevices.size() == 0) {
-            producerLog("No cameras available! Exiting...");
+            logger->error("No cameras available! Exiting...");
             errorOccurred = true;
         }
     }
@@ -130,16 +141,16 @@ bool App::run(int argc, char * argv[]) {
     UniqueObj<CaptureSession> captureSessions[numCameras];
     ICaptureSession *iCaptureSessions[numCameras];
     if (!errorOccurred) {
-        producerLog("Creating the capture sessions...");
+        logger->log("Creating the capture sessions...");
         for (uint8_t i = 0; i < numCameras && !errorOccurred; i++) {
             Argus::Status status;
             captureSessions[i].reset(iCameraProvider->createCaptureSession(cameraDevices[i], &status));
             iCaptureSessions[i] = interface_cast<ICaptureSession>(captureSessions[i]);
             if (status == STATUS_UNAVAILABLE) {
-                producerLog("Camera device unavailable, try rebooting. Exiting...");
+                logger->error("Camera device unavailable, try rebooting. Exiting...");
                 errorOccurred = true;
             } else if (!iCaptureSessions[i]) {
-                producerLog("Failed to get ICaptureSession interface! Exiting...");
+                logger->error("Failed to get ICaptureSession interface! Exiting...");
                 errorOccurred = true;
             }
         }
@@ -151,18 +162,18 @@ bool App::run(int argc, char * argv[]) {
     std::vector<SensorMode*> sensorModes;
     SensorMode *sensorMode = NULL;
     if (!errorOccurred) {
-        producerLog("Verifying the selected sensor mode...");
+        logger->log("Verifying the selected sensor mode...");
         iCameraProperties = interface_cast<ICameraProperties>(cameraDevices[0]);
         if (!iCameraProperties) {
-            producerLog("Failed to get ICameraProperties interface! Exiting...");
+            logger->error("Failed to get ICameraProperties interface! Exiting...");
             errorOccurred = true;
         } else {
             iCameraProperties->getBasicSensorModes(&sensorModes);
             if (sensorModes.size() == 0) {
-                producerLog("Failed to get sensor modes! Exiting...");
+                logger->error("Failed to get sensor modes! Exiting...");
                 errorOccurred = true;
             } else if (_options->captureMode > sensorModes.size()) {
-                producerLog("Unable to set selected sensor mode, setting to default...");
+                logger->log("Unable to set selected sensor mode, setting to default...");
                 _options->setCaptureMode(CAPTURE_MODE_0);
             } else {
                 sensorMode = sensorModes[_options->captureMode];
@@ -173,12 +184,12 @@ bool App::run(int argc, char * argv[]) {
     /* Initialize the settings of output stream */
     UniqueObj<OutputStream> captureStreams[numCameras];
     if (!errorOccurred) {
-        producerLog("Creating the output streams...");
+        logger->log("Creating the output streams...");
         for (uint8_t i = 0; i < numCameras && !errorOccurred; i++) {
             UniqueObj<OutputStreamSettings> streamSettings(iCaptureSessions[i]->createOutputStreamSettings(STREAM_TYPE_EGL));
             IEGLOutputStreamSettings *iEglStreamSettings = interface_cast<IEGLOutputStreamSettings>(streamSettings);
             if (!iEglStreamSettings) {
-                producerLog("Failed to get IEGLOutputStreamSettings interface! Exiting...");
+                logger->error("Failed to get IEGLOutputStreamSettings interface! Exiting...");
                 errorOccurred = true;
             } else {
                 iEglStreamSettings->setPixelFormat(PIXEL_FMT_YCbCr_420_888);
@@ -186,27 +197,27 @@ bool App::run(int argc, char * argv[]) {
                 iEglStreamSettings->setResolution(Size2D<uint32_t>(_options->captureWidth, _options->captureHeight));
                 captureStreams[i] = (UniqueObj<OutputStream>) iCaptureSessions[i]->createOutputStream(streamSettings.get());
                 if (!captureStreams[i]) {
-                    producerLog("Failed to create capture stream! Exiting...");
+                    logger->error("Failed to create capture stream! Exiting...");
                     errorOccurred = true;
                 }
             }
         }
     }
 
-    /* Launch the FrameConsumer thread to consume frames from the OutputStream */
+    /* Launch the threads to consume frames from the OutputStream */
     ConsumerThread *consumers[numCameras];
     uint8_t numThreadsCreated = 0;
     uint8_t numThreadsInitialized = 0;
     if (!errorOccurred) {
-        producerLog("Launching consumer threads...");
+        logger->log("Launching consumer threads...");
         for (uint8_t i = 0; i < numCameras  && !errorOccurred; i++) {
             consumers[i] = new ConsumerThread(captureStreams[i].get(), i, *_options);
             numThreadsCreated = i + 1;
             if (!consumers[i]) {
-                producerLog("Failed to create consumer thread! Exiting...");
+                logger->error("Failed to create consumer thread! Exiting...");
                 errorOccurred = true;
             } else if (!consumers[i]->initialize()) {
-                producerLog("Failed to initialize consumer thread! Exiting...");
+                logger->error("Failed to initialize consumer thread! Exiting...");
                 errorOccurred = true;
             } else {
                 numThreadsInitialized = i + 1;
@@ -216,10 +227,10 @@ bool App::run(int argc, char * argv[]) {
 
     /* Wait until the consumer thread is connected to the stream */
     if (!errorOccurred) {
-        producerLog("Waiting for the consumer threads...");
+        logger->log("Waiting for the consumer threads...");
         for (uint8_t i = 0; i < numCameras && !errorOccurred; i++) {
             if (!consumers[i]->waitRunning()) {
-                producerLog("Failed to start consumer thread! Exiting...");
+                logger->error("Failed to start consumer thread! Exiting...");
                 errorOccurred = true;
             }
         }
@@ -228,17 +239,17 @@ bool App::run(int argc, char * argv[]) {
     /* Create capture request and enable its output stream */
     UniqueObj<Request> requests[numCameras];
     if (!errorOccurred) {
-        producerLog("Creating capture requests and enabling output streams...");
+        logger->log("Creating capture requests and enabling output streams...");
         for (uint8_t i = 0; i < numCameras && !errorOccurred; i++) {
             requests[i].reset(iCaptureSessions[i]->createRequest());
             IRequest *iRequest = interface_cast<IRequest>(requests[i]);
             if (!iRequest) {
-                producerLog("Failed to get request interface! Exiting...");
+                logger->error("Failed to get request interface! Exiting...");
                 errorOccurred = true;
             } else {
                 ISourceSettings *iSourceSettings = interface_cast<ISourceSettings>(iRequest->getSourceSettings());
                 if (!iSourceSettings) {
-                    producerLog("Failed to get source settings interface! Exiting...");
+                    logger->error("Failed to get source settings interface! Exiting...");
                     errorOccurred = true;
                 } else {
                     iSourceSettings->setSensorMode(sensorMode);
@@ -251,10 +262,10 @@ bool App::run(int argc, char * argv[]) {
     /* Submit capture requests. */
     uint8_t numSuccessfulRequests = 0;
     if (!errorOccurred) {
-        producerLog("Starting repeat capture requests...");
+        logger->log("Starting repeat capture requests...");
         for (uint8_t i = 0; i < numCameras && !errorOccurred; i++) {
             if (iCaptureSessions[i] && iCaptureSessions[i]->repeat(requests[i].get()) != STATUS_OK) {
-                producerLog("Failed to start repeat capture requests! Exiting...");
+                logger->error("Failed to start repeat capture requests! Exiting...");
                 errorOccurred = true;
             } else {
                 numSuccessfulRequests = i + 1;
@@ -262,21 +273,32 @@ bool App::run(int argc, char * argv[]) {
         }
     }
 
-    /* Wait for captureTime seconds or until SIGINT is received. */
     if (!errorOccurred) {
+
+        /* Wait for captureTime seconds or until SIGINT is received. */
         if (_options->captureTime > 0) {
             time_t start = time(0);
-            while (time(0) - start < _options->captureTime)
+            while (_doRun && time(0) - start < _options->captureTime) {
                 sleep(1);
-            _doRun = false;
-        } else {
-            while (_doRun)
-                sleep(1);
+                for (int i = 0; i < numCameras; i++) {
+                    if (!consumers[i]->isExecuting())
+                        _doRun = false;
+                }
+            }
         }
-    }
 
-    /* Start stop process for threads */
-    if (!errorOccurred) {
+        /* Wait until SIGINT is received. */
+        else {
+            while (_doRun) {
+                sleep(1);
+                for (int i = 0; i < numCameras; i++) {
+                    if (!consumers[i]->isExecuting())
+                        _doRun = false;
+                }
+            }
+        }
+
+        /* Start stop process for threads */
         for (uint8_t i = 0; i < numCameras; i++)
             if (consumers[i])
                 consumers[i]->stopExecute();
@@ -285,7 +307,7 @@ bool App::run(int argc, char * argv[]) {
 
     /* Stop the repeating request. */
     if (!errorOccurred)
-        producerLog("Stopping repeat capture requests...");
+        logger->log("Stopping repeat capture requests...");
     for (uint8_t i = 0; i < numSuccessfulRequests; i++) {
         if (iCaptureSessions[i]) {
             iCaptureSessions[i]->stopRepeat();
@@ -294,21 +316,21 @@ bool App::run(int argc, char * argv[]) {
 
     /* Wait until the requests have been fulfilled */
     if (!errorOccurred)
-        producerLog("Finishing remaining capture requests...");
+        logger->log("Finishing remaining capture requests...");
     for (uint8_t i = 0; i < numSuccessfulRequests; i++)
         if (iCaptureSessions[i])
             iCaptureSessions[i]->waitForIdle();
 
     /* Destroy the output streams. */
     if (!errorOccurred)
-        producerLog("Destroying the output streams...");
+        logger->log("Destroying the output streams...");
     for (uint8_t i = 0; i < numCameras; i++)
         if (captureStreams[i])
             captureStreams[i].reset();
 
     /* Wait for the consumer thread to complete. */
     if (!errorOccurred)
-        producerLog("Waiting for consumers to terminate...");
+        logger->log("Waiting for consumers to terminate...");
     for (uint8_t i = 0; i < numThreadsInitialized; i++) {
         if (consumers[i])
             consumers[i]->shutdown();
@@ -317,26 +339,8 @@ bool App::run(int argc, char * argv[]) {
         delete consumers[i];
 
     if (!errorOccurred)
-        producerLog("Process has completed successfully, exiting...");
+        logger->log("Process has completed successfully, exiting...");
     return !errorOccurred;
-}
-
-/* Standard method for formatted printing and logging */
-void App::producerLog(const char *s) {
-
-    // format the string
-    std::stringstream ss;
-    ss << "PRODUCER [" << time(0) << "]: " << s;
-
-    // write to STDOUT
-    std::cout << ss.str() << std::endl;
-
-    // write to log file
-    std::string logname(_options->directory);
-    logname += "/log.txt";
-    std::ofstream logfile(logname, std::ios_base::app);
-    if (logfile)
-        logfile << ss.str() << std::endl;
 }
 
 /* Sets the static variable _doRun to false to exit the infinite loop in run() */
