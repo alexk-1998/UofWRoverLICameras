@@ -108,11 +108,3 @@ Enable encoder profiling.
 Print this help.
 ```
 
-So, to run the executable with cameras running 2048x1554 @ 38fps, saving to a directory named "foo", saving every 10th frame, and recording until an external signal is received, call either one of:
-```
-./StreamCapture -m 0 -r foo -s 10 -t 0
-./StreamCapture --capture-mode 0 --root-directory foo --save-every 10 --capture-time 0
-./StreamCapture -r foo -s 10
-./StreamCapture --root-directory foo --save-every 10
-```
-since the desired mode and durations are the default behaviours. Note that the order of the flags does not matter and long and short form flags can be mixed without error.

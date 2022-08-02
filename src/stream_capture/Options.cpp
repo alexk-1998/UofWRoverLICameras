@@ -57,7 +57,7 @@ Options::~Options() {
 /* Display the following text when the executable is called with improper parameters or if the -h flag is passed */
 void Options::printHelp() {
     cout << "Usage:" << endl
-         << "./main [OPTIONS]" << endl
+         << "./StreamCapture [OPTIONS]" << endl
          << endl
          << "Optional Arguments:" << endl
          << endl << "  --capture-mode\t-m\t<0 or 1>\tSensor mode for the IMX265 cameras. [Default: 0]" << endl
