@@ -85,8 +85,8 @@ root
 
 --save-every -s
 <1-inf>
-Save every s frames from the stream. [Default: 1]
-Default will save every frame, if s == 2 then every second frame is saved, etc.
+Save every s frames from the stream. [Default: 4]
+Default will save every frame, if s == 4 then every fourth frame is saved, etc.
 This results in an effective frame rate = fps / s.
 
 --capture-time -t
