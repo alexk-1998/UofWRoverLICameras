@@ -26,6 +26,7 @@ using namespace Argus;
 using namespace EGLStream;
 
 #define MKDIR_MODE 0777
+#define STDOUT_PRINT true
 
 bool App::_doRun = true;
 App::App() :
@@ -41,6 +42,13 @@ bool App::run(int argc, char * argv[]) {
     /* Repeatedly use this value for error handling */
     bool errorOccurred = false;
 
+    /* Register signal callback to various signals (ctrl+c, ctrl+d, etc...)
+       Lazy OR means lines are executed if errorOccurred is not already true */
+    errorOccurred = errorOccurred || signal(SIGHUP, signalCallback) == SIG_ERR;
+    errorOccurred = errorOccurred || signal(SIGINT, signalCallback) == SIG_ERR;
+    errorOccurred = errorOccurred || signal(SIGQUIT, signalCallback) == SIG_ERR;
+    errorOccurred = errorOccurred || signal(SIGTERM, signalCallback) == SIG_ERR;
+
     /* Create the logger object, don't log until directory path is set in options */
     Logger *logger = NULL;
     if (!errorOccurred) {
@@ -53,7 +61,6 @@ bool App::run(int argc, char * argv[]) {
 
     /* Verify the Options object was successfully created */
     if (!errorOccurred) {
-        std::cout << "Verifying the command line options..." << std::endl;
         if (!_options) {
             std::cout << "An error occurred while creating the Options object! Exiting..." << std::endl;
             Options::printHelp();
@@ -65,6 +72,14 @@ bool App::run(int argc, char * argv[]) {
         }
     }
 
+    /* Update logger verbosity */
+    if (!errorOccurred) {
+        if (_options->verbose)
+            logger->enableVerbose();
+        else 
+            logger->disableVerbose();
+    } 
+
     /* Search for available usb device and pre-append options directory to reflect changes
      * Eg. If we choose directory "bar" and a device is found mounted at /media/nvidia/foo/
      * the resultant path should be /media/nvidia/foo/bar/
@@ -72,31 +87,17 @@ bool App::run(int argc, char * argv[]) {
      * the resultant path should be ./bar/
      */
     if (!errorOccurred) {
-        std::cout << "Searching for first available USB volume...\n";
-        std::vector<std::string> devicePaths = getAvailableDevices();
-        std::string path("");
-        for (std::string devicePath : devicePaths) {
-            path = devicePath;
-            break;             // just use the first device
-        }
-        // fall back to system since no path is set
+        if (_options->verbose)
+            std::cout << "Searching for first available volume...\n";
+        std::string path = getAvailableDevice();
         if (path.size() == 0)
-            std::cout << "USB device not found, falling back to saving on system memory...\n";
+            std::cout << "Volume not found, falling back to saving on system memory...\n";
         else
-            std::cout << "Using USB device mounted at: " << path << "\n";
-
-        // pre-append the resultant path to the chosen directory name
-        strncat(&path[0], _options->directory, FILENAME_MAX);
-        strncpy(_options->directory, path.data(), FILENAME_MAX);
+            std::cout << "Using volume mounted at: " << path << "\n";
+        strncat(&path[0], _options->directory, FILENAME_MAX);    // pre-append the resultant path to the chosen directory name
+        strncpy(_options->directory, path.data(), FILENAME_MAX); // copy the full path to the options directory
     }
     logger->setDirectory(_options->directory);
-
-    /* Register signal callback to various signals (ctrl+c, ctrl+d, etc...)
-       Lazy OR means lines are executed if errorOccurred is not already true */
-    errorOccurred = errorOccurred || signal(SIGHUP, signalCallback) == SIG_ERR;
-    errorOccurred = errorOccurred || signal(SIGINT, signalCallback) == SIG_ERR;
-    errorOccurred = errorOccurred || signal(SIGQUIT, signalCallback) == SIG_ERR;
-    errorOccurred = errorOccurred || signal(SIGTERM, signalCallback) == SIG_ERR;
     
     /* Create base directory for saving images, sub-directories are handled by consumers */
     if (!errorOccurred) {
@@ -168,7 +169,7 @@ bool App::run(int argc, char * argv[]) {
                 logger->error("Failed to get sensor modes! Exiting...");
                 errorOccurred = true;
             } else if (_options->captureMode > sensorModes.size()) {
-                logger->log("Unable to set selected sensor mode, setting to default...");
+                logger->log("Unable to set selected sensor mode, setting to default...", STDOUT_PRINT);
                 _options->captureMode = CAPTURE_MODE_0;
             } else {
                 sensorMode = sensorModes[_options->captureMode];
@@ -316,7 +317,7 @@ bool App::run(int argc, char * argv[]) {
 
     /* Stop the repeating request. */
     if (!errorOccurred)
-        logger->log("Stopping repeat capture requests...");
+        logger->log("Stopping repeat capture requests...", STDOUT_PRINT);
     for (uint8_t i = 0; i < numSuccessfulRequests; i++) {
         if (iCaptureSessions[i]) {
             iCaptureSessions[i]->stopRepeat();
@@ -324,22 +325,23 @@ bool App::run(int argc, char * argv[]) {
     }
 
     /* Wait until the requests have been fulfilled */
+    uint64_t timeout = 5000000000UL; // nanoseconds
     if (!errorOccurred)
-        logger->log("Finishing remaining capture requests...");
+        logger->log("Finishing remaining capture requests...", STDOUT_PRINT);
     for (uint8_t i = 0; i < numSuccessfulRequests; i++)
         if (iCaptureSessions[i])
-            iCaptureSessions[i]->waitForIdle();
+            iCaptureSessions[i]->waitForIdle(timeout);
 
     /* Destroy the output streams. */
     if (!errorOccurred)
-        logger->log("Destroying the output streams...");
+        logger->log("Destroying the output streams...", STDOUT_PRINT);
     for (uint8_t i = 0; i < numCameras; i++)
         if (captureStreams[i])
             captureStreams[i].reset();
 
     /* Wait for the consumer thread to complete. */
     if (!errorOccurred)
-        logger->log("Waiting for consumers to terminate...");
+        logger->log("Waiting for consumers to terminate...", STDOUT_PRINT);
     for (uint8_t i = 0; i < numThreadsInitialized; i++) {
         if (consumers[i])
             consumers[i]->shutdown();
@@ -348,7 +350,7 @@ bool App::run(int argc, char * argv[]) {
         delete consumers[i];
 
     if (!errorOccurred)
-        logger->log("Process has completed successfully, exiting...");
+        logger->log("Process has completed successfully, exiting...", STDOUT_PRINT);
     return !errorOccurred;
 }
 
@@ -357,69 +359,71 @@ void App::signalCallback(int signum) {
     _doRun = false;
 }
 
-/* Parse the output of lsblk to return the mount path of any removable block device
- * lsblk output takes the form:
- * NAME         MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT
- * loop0          7:0    0    16M  1 loop 
- * sda            8:0    1  57.6G  0 disk /media/nvidia/$DEVICE
- * mmcblk0      179:0    0  29.1G  0 disk 
+/* Parse the output of df to return the mount path of the disk with the most available space
+ * df output takes the form:
+ * Filesystem     1K-blocks     Used Available Use% Mounted on
+ * /dev/mmcblk0p1  28768292 20688856   6595048  76% /
+ * none             3984856        0   3984856   0% /dev
+ * tmpfs            4024628    67608   3957020   2% /dev/shm
+ * tmpfs            4024628    29104   3995524   1% /run
+ * tmpfs               5120        4      5116   1% /run/lock
+ * tmpfs            4024628        0   4024628   0% /sys/fs/cgroup
+ * tmpfs             804924      124    804800   1% /run/user/1000
+ * /dev/mmcblk2p1 124852224    16768 124835456   1% /media/nvidia/3739-6239
  * ...
  */
-std::vector<std::string> App::getAvailableDevices() {
+std::string App::getAvailableDevice() {
+
+    // command string
+    char cmd[] = "df | grep \"^/dev\"";
 
     // resultant strings, remains empty if pipe fails
-    std::vector<std::string> result;
+    std::string result("");
 
     // avoid magic numbers
-    enum HEADER_INDEX {NAME, MAJ_MIN, RM, SIZE, RO, TYPE, MOUNTPOINT};
+    enum HEADER_INDEX {FILESYSTEM, BLOCKS, USED, AVAILABLE, USE_PERCENT, MOUNT_POINT};
 
-    // stores one line from the lsblk result
+    // stores one line from the cmd result
     size_t bufferSize = 256;
     char buffer[bufferSize];
     std::stringstream ss;
     std::string str;
-    bool valid;
+    uint64_t lastAvail = 0;
+    uint64_t currAvail = 0;
+    bool setMount = false;
 
     // open the pipe and repeatedly parse lines...
-    FILE* pipe = popen("lsblk", "r");
+    FILE* pipe = popen(cmd, "r");
     if (pipe) {
         while (fgets(&buffer[0], bufferSize, pipe)) {
 
             // read buffer into string stream
             ss.str(buffer);
-            valid = true;
-            for (int i = 0; i <= MOUNTPOINT; i++) {
+            setMount = false;
+            for (int i = 0; i <= MOUNT_POINT; i++) {
 
-                // skip if invalid condition is met in previous iteration or ss is empty
-                if (!valid || ss.rdbuf()->in_avail() == 0)
+                // skip if ss is empty
+                if (ss.rdbuf()->in_avail() == 0)
                     break;
 
                 // validate the next token
                 ss >> str;
                 switch (i) {
 
-                    // check if device is removable
-                    case RM:
-                        if (str != "1")
-                            valid = false;
-                        break;
-
-                    // check if device is read-only
-                    case RO:
-                        if (str != "0")
-                            valid = false;
-                        break;
-
-                    // check if device is a disk block/partition
-                    case TYPE:
-                        if (str != "disk" && str != "part")
-                            valid = false;
+                    // check if device has more space than last selection
+                    case AVAILABLE:
+                        currAvail = atoi(str.c_str());
+                        if (currAvail > lastAvail) {
+                            lastAvail = currAvail;
+                            setMount = true;
+                        }
                         break;
 
                     // get mount point path
-                    case MOUNTPOINT:
-                        if (valid && str.size() > 1)
-                            result.push_back(str + "/");
+                    case MOUNT_POINT:
+                        if (setMount && str.size() > 1) {
+                            result = str + "/";
+                        }
                         break;
 
                     default:

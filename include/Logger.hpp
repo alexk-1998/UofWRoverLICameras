@@ -18,8 +18,8 @@ class Logger {
         Logger(const char *name, const char *directory);
         ~Logger();
 
-        void log(std::string s);
-        void log(const char *s);
+        void log(std::string s, bool verbose = false);
+        void log(const char *s, bool verbose = false);
 
         void error(std::string s);
         void error(const char *s);
@@ -27,8 +27,12 @@ class Logger {
         void setDirectory(std::string directory);
         void setDirectory(const char *directory);
 
+        void enableVerbose();
+        void disableVerbose();
+
     private:
         std::string _name;
         std::string _directory;
         std::string _filename;
+        bool _verbose;
 };

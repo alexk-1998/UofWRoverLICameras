@@ -23,6 +23,8 @@ using namespace Argus;
 using namespace EGLStream;
 
 #define MKDIR_MODE 0777
+#define STDOUT_PRINT true
+#define NUM_FRAMES_SKIP 100 // skip frames to avoid white-balance issues
 
 ConsumerThread::ConsumerThread(OutputStream *stream, uint32_t id, const Options& options) :
         _stream(stream),
@@ -56,10 +58,16 @@ bool ConsumerThread::threadInitialize() {
         std::stringstream ss;
         ss << "CONSUMER " << std::to_string(_id);
         _logger = new Logger(ss.str(), _options.directory);
-        if (!_logger)
+        if (!_logger) {
             errorOccurred = true;
-        else
+        } else {
             _logger->log("Logger successfully created!");
+            if (_options.verbose) {
+                _logger->enableVerbose();
+            } else {
+                _logger->disableVerbose();
+            }
+        }
     }
 
     /* Create the image sub-directory */
@@ -101,6 +109,8 @@ bool ConsumerThread::threadInitialize() {
         if (!_jpegEncoder) {
             _logger->error("Failed to create JPEGEncoder!");
             errorOccurred = true;
+        } else if (_options.profile) {
+            _jpegEncoder->enableProfiling();
         }
     }
 
@@ -119,7 +129,7 @@ bool ConsumerThread::threadExecute() {
         _logger->error("Stream failed to connect! Exiting...");
         errorOccurred = true;
     } else
-        _logger->log("Producer has connected! Continuing...");
+        _logger->log("Producer has connected! Continuing...", STDOUT_PRINT);
 
     /* Repeatedly save frames until a shutdown is requested from outside the class */
     uint64_t index = 1;
@@ -134,7 +144,11 @@ bool ConsumerThread::threadExecute() {
         frame.reset(iFrameConsumer->acquireFrame());
         iFrame = interface_cast<IFrame>(frame);
 
-        if (iFrame && (_options.saveEvery == 1 || iFrame->getNumber() % _options.saveEvery == 0)) {
+        /* Update the start time since we skip the first few frames */
+        if (iFrame && iFrame->getNumber() > NUM_FRAMES_SKIP && !wroteFirst)
+            start = std::chrono::steady_clock::now();
+
+        if (iFrame && iFrame->getNumber() > NUM_FRAMES_SKIP && (_options.saveEvery == 1 || iFrame->getNumber() % _options.saveEvery == 0)) {
 
             /* Get the IImageNativeBuffer extension interface */
             iNativeBuffer = interface_cast<NV::IImageNativeBuffer>(iFrame->getImage());
@@ -163,12 +177,12 @@ bool ConsumerThread::threadExecute() {
             if (!errorOccurred) {
                 if (processV4L2Fd(_dmabuf, index++)) {
                     if (!wroteFirst) {
-                        _logger->log("First image successfully written! This message will not be shown for any subsequent images.");
+                        _logger->log("First image successfully written! You may now disconnect.", STDOUT_PRINT);
                         wroteFirst = true;
                     }
                 } else {
                     // device is probably full, don't actually set the error status, just exit
-                    _logger->log("An error occurred while writing the JPEG image, is the device/system full? Exiting...");
+                    _logger->log("An error occurred while writing the JPEG image, is the device/system full? Exiting...", STDOUT_PRINT);
                     _doExecute = false;
                 }
             }
@@ -178,30 +192,30 @@ bool ConsumerThread::threadExecute() {
                 break;
         }
     }
-    auto stop = std::chrono::steady_clock::now();
     _doExecute = false;
 
     /* Calculate and display effective fps */
-    if (_options.profile) {
-        double elapsed = (stop - start).count() / 1e9; // ns to s
-        double fps = (double) index / elapsed;
-        std::stringstream ss;
-        ss << "Images processed: " << std::to_string(index-1);
-        _logger->log(ss.str());
-        ss.str("");
-        ss << "Time elapsed: " << std::to_string(elapsed) << " s";
-        _logger->log(ss.str());
-        ss.str("");
-        ss << "Effective fps: " << std::to_string(fps) << " fps";
-        _logger->log(ss.str());
-    }        
+    auto stop = std::chrono::steady_clock::now();
+    double elapsed = (stop - start).count() / 1e9; // ns to s
+    double fps = (double) index / elapsed;
+    std::stringstream ss;
+    ss << "Images processed: " << std::to_string(index-1);
+    _logger->log(ss.str());
+    ss.str("");
+    ss << "Time elapsed: " << std::to_string(elapsed) << " s";
+    _logger->log(ss.str());
+    ss.str("");
+    ss << "Effective fps: " << std::to_string(fps) << " fps";
+    _logger->log(ss.str());    
 
-    _logger->log("Process completed, requesting shutdown...");
+    _logger->log("Process completed, requesting shutdown...", STDOUT_PRINT);
     requestShutdown();
     return !errorOccurred;
 }
 
 bool ConsumerThread::threadShutdown() {
+    if (_jpegEncoder && _options.profile)
+        _jpegEncoder->printProfilingStats();
     return true;
 }
 

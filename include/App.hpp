@@ -10,7 +10,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
 class Options;
 
@@ -24,7 +23,7 @@ class App {
 
     private:
         static void signalCallback(int signum);
-        static std::vector<std::string> getAvailableDevices();
+        static std::string getAvailableDevice();
 
         Options *_options;
         static bool _doRun;

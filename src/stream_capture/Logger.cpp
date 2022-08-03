@@ -13,44 +13,50 @@
 #include <time.h>
 
 #define DEFAULT_FILENAME "log.txt"
+#define DEFAULT_VERBOSE false
 
 using namespace std;
 
 Logger::Logger(string name, string directory, string filename) :
     _name(name),
     _directory(directory),
-    _filename(filename)
+    _filename(filename),
+    _verbose(DEFAULT_VERBOSE)
 {}
 
 Logger::Logger(const char *name, const char *directory, const char *filename) :
     _name(name),
     _directory(directory),
-    _filename(filename)
+    _filename(filename),
+    _verbose(DEFAULT_VERBOSE)
 {}
 
 Logger::Logger(string name, string directory) :
     _name(name),
     _directory(directory),
-    _filename(DEFAULT_FILENAME)
+    _filename(DEFAULT_FILENAME),
+    _verbose(DEFAULT_VERBOSE)
 {}
 
 Logger::Logger(const char *name, const char *directory) :
     _name(name),
     _directory(directory),
-    _filename(DEFAULT_FILENAME)
+    _filename(DEFAULT_FILENAME),
+    _verbose(DEFAULT_VERBOSE)
 {}
 
 Logger::~Logger() {}
 
 /* Standard method for formatted printing and logging */
-void Logger::log(string s) {
+void Logger::log(string s, bool verbose) {
 
     // format the string
     stringstream ss;
     ss << _name << " [" << time(0) << "]: " << s;
 
     // write to STDOUT
-    cout << ss.str() << "\n";
+    if (_verbose || verbose)
+        cout << ss.str() << "\n";
 
     // write to log file
     string logname(_directory);
@@ -65,22 +71,22 @@ void Logger::error(string s) {
 
     // format the string
     stringstream ss;
-    ss << _name << " [" << time(0) << "]: " << s;
+    ss << "ERROR: " << _name << " [" << time(0) << "]: " << s;
 
     // write to STDOUT
-    cout << ss.str() << endl;
+    cout << ss.str() << "\n";
 
     // write to log file
     string logname(_directory);
     logname = logname + "/" + _filename;
     ofstream logfile(logname, ios_base::app);
     if (logfile)
-        logfile << ss.str() << endl;
+        logfile << ss.str() << "\n";
 }
 
 /* Wrapper around std::string method */
-void Logger::log(const char *s) {
-    log(string(s));
+void Logger::log(const char *s, bool verbose) {
+    log(string(s), verbose);
 }
 
 /* Wrapper around std::string method */
@@ -96,4 +102,14 @@ void Logger::setDirectory(string directory) {
 /* Wrapper around std::string method */
 void Logger::setDirectory(const char *directory) {
     setDirectory(string(directory));
+}
+
+/* Enable verbose logging */
+void Logger::enableVerbose() {
+    _verbose = true;
+}
+
+/* Disable verbose logging */
+void Logger::disableVerbose() {
+    _verbose = false;
 }

@@ -18,8 +18,9 @@ using namespace std;
 #define MKDIR_MODE 0777
 
 #define DEFAULT_PROFILE false
+#define DEFAULT_VERBOSE false
 #define DEFAULT_CAPTURE_TIME 0U
-#define DEFAULT_SAVE_EVERY 1U
+#define DEFAULT_SAVE_EVERY 4U
 
 /* 2048x1554 @ 38 FPS */
 #define CAPTURE_WIDTH_0 2048U
@@ -35,6 +36,7 @@ using namespace std;
 /* Default constructor, initialize to all default options then parse the input */
 Options::Options() :
     profile(DEFAULT_PROFILE),
+    verbose(DEFAULT_VERBOSE),
     captureTime(DEFAULT_CAPTURE_TIME),
     saveEvery(DEFAULT_SAVE_EVERY),
     directory(NULL),
@@ -60,7 +62,7 @@ void Options::printHelp() {
          << "./StreamCapture [OPTIONS]" << endl
          << endl
          << "Optional Arguments:" << endl
-         << endl << "  --capture-mode\t-m\t<0 or 1>\tSensor mode for the IMX265 cameras. [Default: 0]" << endl
+         << endl << "  --capture-mode\t-m\t<0 or 1>\tSensor mode for the IMX265 cameras. [Default: " << CAPTURE_MODE_0 << "]" << endl
          << "Mode " << CAPTURE_MODE_0 << ": " << CAPTURE_WIDTH_0 << "x" << CAPTURE_HEIGHT_0 << " @ " << CAPTURE_FPS_0 << "fps" << endl
          << "Mode " << CAPTURE_MODE_1 << ": " << CAPTURE_WIDTH_1 << "x" << CAPTURE_HEIGHT_1 << " @ " << CAPTURE_FPS_1 << "fps" << endl
          << endl << "  --root-directory\t-r\t<str>\t\tRoot path of the image directory for storing all images. [Default: system time]" << endl
@@ -73,11 +75,12 @@ void Options::printHelp() {
          << "  cam1" << endl
          << "  ..." << endl
          << "  options.txt" << endl
-         << endl << "  --save-every\t\t-s\t<1-inf>\t\tSave every s frames from the stream. [Default: 1]" << endl
+         << endl << "  --save-every\t\t-s\t<1-inf>\t\tSave every s frames from the stream. [Default: " << DEFAULT_SAVE_EVERY << "]" << endl
          << "Default will save every frame, if s == 2 then every second frame is saved, etc." << endl
-         << endl << "  --capture-time\t-t\t<0-inf>\t\tRecording time in seconds. [Default: 0]" << endl
+         << endl << "  --capture-time\t-t\t<0-inf>\t\tRecording time in seconds. [Default: " << DEFAULT_CAPTURE_TIME << "]" << endl
          << "Passing 0 requires the process be killed from an external signal (ctrl+c)." << endl
          << endl << "  --profile\t\t-p\tNone\t\tEnable encoder profiling." << endl
+         << endl << "  --verbose\t\t-v\tNone\t\tEnable verbose output." << endl
          << endl << "  --help\t\t-h\tNone\t\tPrint this help." << endl
          << endl;
 }
@@ -90,9 +93,10 @@ bool Options::parse(int argc, char *argv[]) {
     static struct option long_options[] = {
         /* These options set a flag. */
         {"profile", no_argument, &profile, 1},
+        {"verbose", no_argument, &verbose, 1},
         {"help", no_argument, &valid, 0},
         /* These options don’t set a flag. We distinguish them by their indices. */
-        {"root-directory", required_argument, NULL, 'd'},
+        {"root-directory", required_argument, NULL, 'r'},
         {"capture-mode",  required_argument, NULL, 'm'},
         {"save-every",  required_argument, NULL, 's'},
         {"capture-time", required_argument, NULL, 't'},
@@ -100,21 +104,11 @@ bool Options::parse(int argc, char *argv[]) {
     };
 
     int c;
-    while (valid && (c = getopt_long(argc, argv, "d:m:s:t:ph", long_options, NULL)) != -1) {
+    while (valid && (c = getopt_long(argc, argv, "m:r:s:t:pvh", long_options, NULL)) != -1) {
         switch (c) {
 
             /* Do nothing */
             case 0:
-                break;
-
-            /* Copy and validate passed folder name */
-            case 'd':
-                if (strlen(optarg) == 0 || !isalnum(optarg[0])) {
-                    cout << "Invalid directory name, must begin with at least one alphanumeric character" << endl;
-                    valid = false;
-                } else {
-                    strncpy(directory, optarg, FILENAME_MAX);
-                }
                 break;
 
             /* Copy and validate passed sensor mode */
@@ -124,18 +118,19 @@ bool Options::parse(int argc, char *argv[]) {
                     cout << "Invalid sensor mode, expected " << CAPTURE_MODE_0 << " or " << CAPTURE_MODE_1 << endl;
                     valid = false;
                 }
-                //if (captureMode == CAPTURE_MODE_1) {
-                //    cout << "The chosen sensor mode is temporarily disabled, use the default mode." << endl;
-                //    valid = false;     
-                //}
+                if (captureMode == CAPTURE_MODE_1) {
+                    cout << "Selected capture mode temporarily disabled, sorry!" << endl;
+                    valid = false; 
+                }
                 break;
 
-            /* Get the time to capture */
-            case 't':
-                captureTime = atoi(optarg);
-                if (captureTime < 0) {
-                    cout << "Invalid capture time, expected >= 0" << endl;
+            /* Copy and validate passed folder name */
+            case 'r':
+                if (strlen(optarg) == 0 || !isalnum(optarg[0])) {
+                    cout << "Invalid directory name, must begin with at least one alphanumeric character" << endl;
                     valid = false;
+                } else {
+                    strncpy(directory, optarg, FILENAME_MAX);
                 }
                 break;
 
@@ -148,9 +143,23 @@ bool Options::parse(int argc, char *argv[]) {
                 }
                 break;
 
-            /* Enable debugging mode (verbose output and encoder profiling) */
+            /* Get the time to capture */
+            case 't':
+                captureTime = atoi(optarg);
+                if (captureTime < 0) {
+                    cout << "Invalid capture time, expected >= 0" << endl;
+                    valid = false;
+                }
+                break;
+
+            /* Enable encoder profiling */
             case 'p':
                 profile = !DEFAULT_PROFILE;
+                break;
+
+            /* Enable verbose output */
+            case 'v':
+                verbose = !DEFAULT_VERBOSE;
                 break;
         
             /* Show the help message */
@@ -183,6 +192,7 @@ void Options::write() {
     else
         outputFile << "Capture time: " << captureTime << endl;
     outputFile << "Profile: " << (bool) profile << endl;
+    outputFile << "Verbose: " << (bool) verbose << endl;
     outputFile << "Save every: " << saveEvery << endl;
     outputFile.close();
 }

@@ -30,8 +30,8 @@ using namespace EGLStream;
 /* Constants */
 static const uint32_t            MAX_CAMERA_NUM = 6;
 static const uint32_t            DEFAULT_FPS = 38;
-static const int32_t             CELL_WIDTH = 400;
-static const int32_t             CELL_HEIGHT = 300;
+static const int32_t             CELL_WIDTH = 512;  // 2048 / 4 = 512.0
+static const int32_t             CELL_HEIGHT = 388; // 1554 / 4 = 388.5
 static const int32_t             CELL_SPACING = 2;
 static const Size2D<uint32_t>    STREAM_SIZE(3 * CELL_WIDTH + 4 * CELL_SPACING, 2 * CELL_HEIGHT + 3 * CELL_SPACING);
 

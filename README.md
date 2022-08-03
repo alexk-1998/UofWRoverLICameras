@@ -98,6 +98,10 @@ Passing 0 requires the process be killed from an external signal (ctrl+c).
 <no value>
 Enable encoder profiling.
 
+--verbose -v
+<no value>
+Enable verbose output.
+
 --help -h
 <no value>
 Print this help.

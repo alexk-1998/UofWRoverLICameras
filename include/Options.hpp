@@ -28,5 +28,6 @@ class Options {
         Argus::Size2D<uint32_t> captureResolution;
         int captureTime;
         int profile;
+        int verbose;
         int saveEvery;
 };
