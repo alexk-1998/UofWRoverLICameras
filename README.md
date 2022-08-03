@@ -26,9 +26,9 @@ systemctl enable /opt/nvidia/l4t-usb-device-mode/nv-l4t-usb-device-mode.service
 service nv-l4t-usb-device-mode start
 ```
 
-Note: using the libnvjpeg.so file from JetPack 4.3.1 will likely cause run-time errors. Replace the library with the file discussed in [this](https://forums.developer.nvidia.com/t/streaming-using-jpegenc-halts-after-a-short-delay/109924/5) thread. The patched file can be found [here](https://forums.developer.nvidia.com/uploads/short-url/lG7SzRLCUvmzaEwNGw3jtMbH0YI.zip). The file can easily be replaced by running:
+Note: using the libnvjpeg.so file from JetPack 4.3.1 will likely cause run-time errors. Replace the library with the file discussed in [this](https://forums.developer.nvidia.com/t/streaming-using-jpegenc-halts-after-a-short-delay/109924/5) thread. The patched file can be found [here](https://forums.developer.nvidia.com/uploads/short-url/lG7SzRLCUvmzaEwNGw3jtMbH0YI.zip). Once downloaded, the file can easily be replaced by running:
 ```
-sudo cp /home/nvidia/Downloads/libnvjpeg.so /usr/lib/aarch64-linux-gnu/tegra/
+sudo cp ~/Downloads/libnvjpeg.so /usr/lib/aarch64-linux-gnu/tegra/
 ```
 On a different system, the existing library may not be under the directory `/usr/lib/aarch64-linux-gnu/tegra/` and the actual file path can be found with:
 ```
