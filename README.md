@@ -38,10 +38,9 @@ sudo find / -name libnvjpeg.so
 # Build
 Clone the repository, a `Makefile` is provided that allows both executables to be built by running the command:
 ```
-make
-make install
+make && make install
 ```
-from the root of the cloned repository directory. There will be resultant executables in the base of the repository, as well as symbolic links in the user home folder ~.
+from the root of the cloned repository directory. The executables are not installed system wide, ```make install``` only creates symbolic links in the user home folder. So, the executables can be ran from the base of the repository or the user home folder after install. The ```Makefile``` can easily be adjusted to change this behaviour.
 
 # Run
 Both executables are intended to be ran from the command line. Either executable can be ran with default options by calling
